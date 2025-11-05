@@ -1,61 +1,94 @@
-# Terraform-managed PostgreSQL access control
+# Terraform-managed PostgreSQL Access Control
 
-## Purpose
+## Overview
 
-This was needed, as we were running 3 PostgreSQL instances with 20 databases across 50+ microservices.
-Each service needs to access multiple databases with varying access control.
-To do this in an IaC manner, I found this Postgres Terraform provider. With the correct permission, we could generate Postgres user credentials and store them in the shared secret manager while making sure no credentials are stored in the Terraform state.
+This project provides Infrastructure as Code (IaC) management for PostgreSQL database access control across multiple instances and microservices. It was designed to handle the complexity of managing 3 PostgreSQL instances with 20 databases serving 50+ microservices, each requiring different levels of database access.
 
-## How it was actually implemented
+## Problem Statement
 
-### Configuration
+Managing database access across a large microservices architecture presents several challenges:
 
-We were using maps which were passed to the module.
-Inside the module the resources using these configurations to do the actual resource generation.
+- **Scale**: Multiple PostgreSQL instances with numerous databases
+- **Security**: Varying access control requirements per service
+- **Automation**: Need for IaC approach to credential management
+- **State Security**: Ensuring credentials are never stored in Terraform state
 
-The configurations passed to the module:
+## Solution
 
-```hcp
+This solution leverages the [PostgreSQL Terraform provider](https://registry.terraform.io/providers/cyrilgdn/postgresql) combined with AWS Secrets Manager to:
+
+- Generate PostgreSQL user credentials securely
+- Store credentials in a centralized secret manager
+- Maintain zero credential exposure in Terraform state
+- Automate database access provisioning
+
+## Architecture
+
+### Configuration Structure
+
+The module accepts configuration maps that define users and database ownership:
+
+```hcl
 user = {
-  main = { # this is the key for the postgresql instance to target
-    database_owner_username = {access = []} # This was is only a database owner and does not need access to another database
-    postgres_username = {access = ["read_database_name","write_database_name"]} # these were roles given to the user to access databases it did not own. These roles were automatically generated after the database was created
+  main = { # PostgreSQL instance identifier
+    database_owner_username = {
+      access = [] # Database owner with no additional access needed
+    }
+    postgres_username = {
+      access = ["read_database_name", "write_database_name"] # User with specific role-based access
+    }
   }
 }
 
 database_owner = {
-  main = { # this is the key for the postgresql instance to target
-    database_name = "database_owner_username" 
+  main = { # PostgreSQL instance identifier
+    database_name = "database_owner_username"
   }
 }
 ```
 
-### Resource creation flow
+### Resource Creation Flow
 
 ```mermaid
 flowchart TD
-  User --> Database
-  Database --> D[User Access Grant]
+    A[User Creation] --> B[Database Creation]
+    B --> C[Role Assignment]
+    C --> D[Access Grants]
+
+    note1[Note: Databases cannot be created without users]
+    note2[Note: Users cannot get access without roles that depend on databases]
 ```
 
-database can not be created without users
+**Important Dependencies:**
 
-users can not get access without roles which need the database
+- Databases cannot be created without users
+- Users cannot receive access grants without roles that require the database to exist first
 
-### Credentials generation and sharing
+## Implementation Details
 
-We used AWS secret manger for secret management.
-When a new user is created we run a script which will do the following:
+### Credential Management Workflow
 
-1. Assume the correct AWS role
-2. Setup an SSH tunnel using AWS SSM
-3. Generate random secret using the AWS secret manger tool.
-4. Store/Update the secret in AWS secret manger at `rds/application/postgres-username`
-5. Generate the PostgreSQL user.
+The system uses AWS Secrets Manager for secure credential storage with the following process:
 
-#### QnA
-Q1. Why do this and not use the terraform provider's [postgresql_role rsources](https://registry.terraform.io/providers/cyrilgdn/postgresql/1.25.0/docs/resources/postgresql_roleresources/postgresql_role)?
-A. At that time provider did not support write only password and would save the password the terraform state.
+1. **AWS Role Assumption**: Assume the appropriate AWS IAM role
+2. **Secure Connection**: Establish SSH tunnel using AWS Systems Manager (SSM)
+3. **Secret Generation**: Create random password using AWS Secrets Manager
+4. **Secret Storage**: Store credential in AWS Secrets Manager at `rds/application/postgres-username` allowing the application to pick it up without any additional configuration
+5. **User Creation**: Provision the PostgreSQL user with the stored credential
 
-Q2. Why is the password first stored in the secret manger and then user created?
-A. This was done if the order was the other way around and the secret manger store step failed after the user was created then we would lose the password and would need manual intervention whereas right now that is not the case
+### Security Benefits
+
+- **Zero State Exposure**: No credentials stored in Terraform state files
+- **Centralized Management**: All secrets managed through AWS Secrets Manager
+- **Automated Rotation**: Supports credential rotation workflows
+- **Audit Trail**: Full logging of credential access and modifications
+
+## Frequently Asked Questions
+
+### Q1: Why not use the terraform provider's [postgresql_role resources](https://registry.terraform.io/providers/cyrilgdn/postgresql/1.25.0/docs/resources/postgresql_role)?
+
+**A1**: At the time of implementation, the provider did not support write-only password functionality and would persist passwords in the Terraform state, creating a security vulnerability.
+
+### Q2: Why is the password stored in Secrets Manager before user creation?
+
+**A2**: This order prevents credential loss scenarios. If we created the user first and then the Secrets Manager storage failed, we would lose the password and require manual intervention. The current approach ensures password availability before user creation.
