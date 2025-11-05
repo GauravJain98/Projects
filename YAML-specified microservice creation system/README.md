@@ -61,26 +61,6 @@ This Terraform expression:
 - Loads and parses YAML configuration for each service
 - Enables dynamic service registration without code changes
 
-## Benefits
-
-### Developer Experience
-
-- **Simple Service Creation**: New microservice = new YAML file
-- **Quick Access**: Service configuration accessible via file shortcuts
-- **Self-Documenting**: YAML format is human-readable and version-controlled
-
-### Operational Excellence
-
-- **Dramatic Time Reduction**: Deployment time reduced from hours to 30 minutes
-- **Reduced Errors**: Eliminates manual workspace updates
-- **Scalable Architecture**: Supports unlimited services without configuration bloat
-- **Improved Maintainability**: Each service configuration is isolated and manageable
-
-### Team Collaboration
-
-- **Clear Ownership**: Each YAML file can be owned by specific teams
-- **Easy Code Reviews**: Changes are isolated to relevant service files
-
 ## Project Structure
 
 ```text
@@ -105,3 +85,23 @@ This Terraform expression:
 │   └── production/
 └── config.tf                     # Dynamic configuration loading
 ```
+
+## Benefits
+
+### Developer Experience
+
+- **Simple Service Creation**: New microservice = new YAML file
+- **Quick Access**: Service configuration accessible via file shortcuts
+- **Self-Documenting**: YAML format is human-readable and version-controlled
+
+### Operational Excellence
+
+- **Dramatic Time Reduction**: Deployment time reduced from hours to 30 minutes
+- **Reduced Errors**: Eliminates manual workspace updates
+- **Scalable Architecture**: Supports unlimited services without configuration bloat
+- **Improved Maintainability**: Each service configuration is isolated and manageable
+
+### Team Collaboration
+
+- **Clear Ownership**: Each YAML file can be owned by specific teams
+- **Easy Code Reviews**: Changes are isolated to relevant service files
