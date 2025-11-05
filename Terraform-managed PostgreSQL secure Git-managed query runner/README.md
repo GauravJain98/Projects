@@ -1,66 +1,111 @@
-# Terraform-managed PostgreSQL secure Git-managed query runner
+# Terraform-Managed PostgreSQL Secure Git-Managed Query Runner
 
-## Purpose
+## Overview
 
-This is a project created out of the need to run queries in the production database in a secure tracked manner, such as indexing, feature flags, etc.
+This project provides a secure, auditable system for executing database queries in production environments. It was designed to handle critical database operations like indexing, feature flags, and schema changes in a controlled, tracked manner that maintains full audit trails and approval workflows.
 
-We used the following intriguing things:
+## Problem Statement
 
-- `terraform_data` resource and terraform state to manage the queries that have already been run successfully.
-- AWS SSM for a secure ssh connection to the database
-- The GitHub issue template is designed to collect essential information from the developer, including the database name, PostgreSQL instance name, and query code.
-- A GitHub action is used to generate the query code, add the query, create a pull request (PR) for it, and send a Slack notification to the team, which could enable this query to run in production.
-- The benefit of this system is that all approvals and interactions are conducted and tracked on GitHub; additionally, this flow allows for the entire process to run in the background without requiring any interaction with Terraform.
+Running production database queries safely requires:
 
-## Base structure of the workspace
+- **Security**: Secure connection methods to production databases
+- **Auditability**: Full tracking of what queries were executed and when
+- **Approval Process**: Team review and approval before execution
+- **State Management**: Tracking successful executions to prevent re-runs
+- **Developer Experience**: Simple interface for developers to submit queries
+
+## Solution Architecture
+
+This system combines several technologies to create a secure, automated workflow:
+
+### Core Components
+
+- **Terraform State Management**: Uses `terraform_data` resource to track query execution status
+- **AWS Systems Manager (SSM)**: Provides secure SSH tunneling to databases
+- **GitHub Integration**: Issue templates and Actions for workflow automation
+- **Slack Notifications**: Team communication and approval coordination
+
+### Key Benefits
+
+- **Full GitHub Audit Trail**: All approvals and interactions tracked in GitHub
+- **Background Execution**: Automated workflow requiring minimal manual intervention
+- **Secure Access**: No direct database credentials or connections required
+- **State Persistence**: Terraform state prevents accidental query re-execution
+
+## Project Structure
 
 ```
 .
-├── enviroment
-│   ├── data.tf
-│   ├── locals.tf
-│   ├── provider.tf
-│   └── queries
-│       ├── 1234.yaml
-│       ├── asdfjka.yaml
-│       ..
-└── terraform-modules
-    └── query
-        ├── main.tf
-        ├── providers.tf
-        ├── run.sh
-        └── variables.tf
+├── environment/
+│   ├── data.tf                 # Data sources and remote state
+│   ├── locals.tf               # Local values and configurations
+│   ├── provider.tf             # Provider configurations
+│   └── queries/                # Query definitions directory
+│       ├── 1234.yaml          # Individual query files
+│       ├── asdfjka.yaml       # (randomly generated names)
+│       └── ...
+└── terraform-modules/
+    └── query/                  # Reusable query execution module
+        ├── main.tf            # Main module logic
+        ├── providers.tf       # Module provider requirements
+        ├── run.sh            # Query execution script
+        └── variables.tf       # Module input variables
 ```
 
-- There is 1 invocation of the module query per queries file
-- We will only be using `terraform_data` resource for this as we only need to track the following:
-  - Output of the query
-  - If the query was successful
-- The plan time is almost constant as the provider calls no not scale with the number of queries.
-- This is similar to tracking if a shell query was success of not and storing that information in terraform state
+### Architecture Details
 
-## Developer Experience
+- **One Module Instance Per Query**: Each YAML file triggers a separate module invocation
+- **Terraform Data Resource**: Tracks execution state without requiring external providers
+- **Constant Plan Time**: Performance scales independently of query count
+- **State-Based Tracking**: Similar to shell script success/failure tracking in Terraform state
 
-1.
-<figure>
-<img src="issue.png" alt="New Issue"/>
-<figcaption>New Issue</figcaption>
-</figure>
-2.
-<figure>
-<img src="input.png" alt="Issue Input"/>
-<figcaption>Issue Input</figcaption>
-</figure>
+## Developer Workflow
 
-## Post Issue Creation
+### Step 1: Issue Creation
 
-Once an issue has been created we do the following steps using GitHub actions.
+Developers create GitHub issues using structured templates that collect:
 
-1. Extract and validate information from the issue
-2. Create a random name YAML file in the `queries folder`
-3. Create a branch with the random name and commit the file.
-4. Create a PR for this branch.
-5. Send a Slack Notification
+1. **New Issue Creation**
+   <figure>
+   <img src="issue.png" alt="GitHub Issue Creation Interface"/>
+   <figcaption>GitHub Issue Template for Query Requests</figcaption>
+   </figure>
 
-Once the PR is created a new GitHub action runs to comment the plan in the PR, so the appropriate user can read the comment and approve the PR.
+2. **Required Information Input**
+   <figure>
+   <img src="input.png" alt="Issue Input Form"/>
+   <figcaption>Structured Input Form for Query Details</figcaption>
+   </figure>
 
+**Required Information:**
+- Target database name
+- PostgreSQL instance identifier
+- Query code to execute
+- Justification and context
+
+### Step 2: Automated Processing
+
+Once an issue is created, GitHub Actions automatically:
+
+1. **Validation**: Extract and validate information from the issue template
+2. **File Generation**: Create a randomly-named YAML file in the `queries/` directory
+3. **Branch Creation**: Generate a new branch with the random name and commit the query file
+4. **Pull Request**: Create a PR for team review and approval
+5. **Notification**: Send Slack notification to relevant team members
+
+### Step 3: Review and Approval
+
+The automated system provides:
+
+- **Terraform Plan**: GitHub Action comments the execution plan in the PR
+- **Team Review**: Appropriate team members review the query and impact
+- **Approval Process**: Standard GitHub PR approval workflow
+- **Execution Tracking**: Terraform state management prevents duplicate runs
+
+## Security Features
+
+- **No Direct Database Access**: All connections via secure AWS SSM tunnels
+- **Credential Management**: No database credentials stored in code or state
+- **Audit Trail**: Complete history of all query requests and executions
+- **Access Control**: GitHub permissions control who can approve and merge
+- **State Protection**: Terraform state prevents accidental re-execution
